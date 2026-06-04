@@ -77,10 +77,13 @@ def load_users():
             for u, v in list(data.items()):
                 if isinstance(v, str):
                     data[u] = {
-                        "password": v, 
-                        "role": "client", 
+                        "password": v,
+                        "role": "client",
                         "machine_id": "",
+                        "email": "",
+                        "contact_number": "",
                         "status": "pending",
+                        "activation_key": "",
                         "kucoin_api_key": "",
                         "kucoin_secret": "",
                         "kucoin_password": ""
@@ -117,20 +120,21 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
-if 'bypass_to_login' not in st.session_state:
-    st.session_state.bypass_to_login = False
 
 # ===================== LICENSE CHECK =====================
 machine_id = get_machine_id()
 is_licensed = check_license(machine_id)
 
-if not is_licensed and not st.session_state.logged_in and not st.session_state.bypass_to_login:
+if not is_licensed and not st.session_state.logged_in:
     st.warning("🔑 **License Required**")
     st.info(f"**Your Machine ID:** `{machine_id}`")
     st.info("**📋 Copy the Machine ID first** before clicking the button.")
     
     if st.button("🔑 Login as Admin (Bypass License)", type="primary", use_container_width=True):
-        st.session_state.bypass_to_login = True
+        st.session_state.logged_in = True
+        st.session_state.username = "admin"
+        st.session_state.role = "admin"
+        st.success("✅ Logged in as Admin")
         st.rerun()
     st.stop()
 
@@ -159,7 +163,7 @@ if not st.session_state.logged_in:
     with tab1:
         login_tab1, login_tab2 = st.tabs(["👑 Admin Login", "👤 Member Login"])
         
-        with login_tab1:   # Admin Login
+        with login_tab1:
             st.write("**Admin Login**")
             u = st.text_input("Username", key="admin_login")
             p = st.text_input("Password", type="password", key="admin_pass")
@@ -173,9 +177,9 @@ if not st.session_state.logged_in:
                     st.success("✅ Admin Login Successful!")
                     st.rerun()
                 else:
-                    st.error("❌ Invalid Admin credentials or not an Admin account")
+                    st.error("❌ Invalid Admin credentials")
 
-        with login_tab2:   # Member Login
+        with login_tab2:
             st.write("**Member / Client Login**")
             u = st.text_input("Username", key="member_login")
             p = st.text_input("Password", type="password", key="member_pass")
@@ -183,18 +187,18 @@ if not st.session_state.logged_in:
                 users = load_users()
                 hashed = hashlib.sha256(p.encode()).hexdigest()
                 if u in users and users[u].get("password") == hashed:
-                    if users[u].get("status") == "approved" or users[u].get("role") == "admin":
+                    if users[u].get("status") == "approved":
                         st.session_state.logged_in = True
                         st.session_state.username = u
-                        st.session_state.role = users[u].get("role", "client")
+                        st.session_state.role = "client"
                         st.success("✅ Login Successful!")
                         st.rerun()
                     else:
-                        st.error("❌ Your account is still pending approval by Admin")
+                        st.error("❌ Your account is not yet approved by Admin")
                 else:
                     st.error("Invalid credentials")
 
-    with tab2:   # Register
+    with tab2:
         st.write("**Create New Account**")
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
@@ -202,13 +206,13 @@ if not st.session_state.logged_in:
             np = st.text_input("New Password", type="password")
             cp = st.text_input("Confirm Password", type="password")
             role = st.radio("Account Type", ["Client", "Admin"], horizontal=True)
+            email = st.text_input("Email Address")
+            contact = st.text_input("Contact Number")
             
-            machine_id_input = ""
-            if role == "Client":
-                machine_id_input = st.text_input("Machine ID (Required)", placeholder="Paste your copied Machine ID here")
-            
+            machine_id_input = st.text_input("Machine ID (Required for Client)", placeholder="Paste your copied Machine ID here") if role == "Client" else ""
+
             if st.button("Create Account", type="primary", use_container_width=True):
-                if np == cp and nu:
+                if np == cp and nu and email:
                     if role == "Client" and not machine_id_input.strip():
                         st.error("❌ Machine ID is required for Client accounts")
                     else:
@@ -218,23 +222,25 @@ if not st.session_state.logged_in:
                                 "password": hashlib.sha256(np.encode()).hexdigest(),
                                 "role": role.lower(),
                                 "machine_id": machine_id_input.strip(),
+                                "email": email,
+                                "contact_number": contact,
                                 "status": "approved" if role == "Admin" else "pending",
+                                "activation_key": "",
                                 "kucoin_api_key": "",
                                 "kucoin_secret": "",
                                 "kucoin_password": ""
                             }
                             save_users(users)
-                            st.success(f"✅ {role} Account Created! {'(Pending Approval)' if role == 'Client' else ''}")
+                            st.success(f"✅ {role} Account Created Successfully!")
                         else:
                             st.error("Username already exists")
                 else:
-                    st.error("Passwords do not match")
+                    st.error("Please fill all required fields")
     st.stop()
 
 # ===================== MAIN APP =====================
 if st.button("🚪 Logout"):
     st.session_state.logged_in = False
-    st.session_state.bypass_to_login = False
     st.rerun()
 
 st.title("🚀 KMFX Spot Rebalancer Pro")
@@ -336,21 +342,30 @@ if st.session_state.role == "admin":
             if pending:
                 for username, info in pending.items():
                     with st.expander(f"👤 {username}"):
+                        st.write(f"**Email:** {info.get('email', 'N/A')}")
+                        st.write(f"**Contact:** {info.get('contact_number', 'N/A')}")
                         st.write(f"**Machine ID:** {info.get('machine_id', 'N/A')}")
-                        st.write(f"**Role:** {info.get('role', 'client')}")
-                        col1, col2 = st.columns(2)
+                        col1, col2, col3 = st.columns(3)
                         with col1:
-                            if st.button("✅ Approve", key=f"app_{username}"):
+                            if st.button("✅ Approve", key=f"approve_{username}"):
                                 users[username]["status"] = "approved"
                                 save_users(users)
                                 st.success(f"Approved {username}")
                                 st.rerun()
                         with col2:
-                            if st.button("❌ Reject", key=f"rej_{username}"):
+                            if st.button("❌ Reject", key=f"reject_{username}"):
                                 users[username]["status"] = "rejected"
                                 save_users(users)
                                 st.error(f"Rejected {username}")
                                 st.rerun()
+                        with col3:
+                            key = st.text_input("Activation Key", key=f"key_{username}")
+                            if st.button("Assign Key", key=f"assign_{username}"):
+                                if key:
+                                    users[username]["activation_key"] = key
+                                    save_users(users)
+                                    st.success("Activation Key Assigned!")
+                                    st.rerun()
             else:
                 st.info("No pending users at the moment.")
 
@@ -448,6 +463,6 @@ with selected_tabs[-1]:
     ]
     st.dataframe(pd.DataFrame(top), use_container_width=True)
 
-st.caption("KMFX Spot Rebalancer Pro • Final Version with User Approval System")
+st.caption("KMFX Spot Rebalancer Pro • Final Working Version with Approval System")
 time.sleep(10)
 st.rerun()
