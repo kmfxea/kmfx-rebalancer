@@ -166,7 +166,12 @@ if st.button("🚪 Logout"):
 st.title("🚀 KMFX Spot Rebalancer Pro")
 st.sidebar.success(f"👤 {st.session_state.username} | {st.session_state.role.upper()}")
 
-# ===================== SIDEBAR API KEYS =====================
+# ===================== SIDEBAR SETTINGS (Moved Up) =====================
+st.sidebar.subheader("⚙️ Trading Settings")
+exchange_name = st.sidebar.selectbox("Exchange", ["KuCoin", "Binance"])
+mode = st.sidebar.radio("Trading Mode", ["Paper Trading", "Real Trading"], horizontal=True)
+rebalance_interval = st.sidebar.selectbox("Auto Rebalance Schedule", ["Manual", "Every 2 Hours", "Every 6 Hours", "Every 12 Hours", "Daily"])
+
 st.sidebar.subheader("🔑 KuCoin API Keys")
 api_key = st.sidebar.text_input("API Key", type="password")
 api_secret = st.sidebar.text_input("API Secret", type="password")
@@ -289,10 +294,13 @@ if st.session_state.role == "admin":
 
         with admin_tab2:
             st.subheader("🔑 All Licenses")
-            df = get_all_licenses()
-            if not df.empty:
-                st.dataframe(df, use_container_width=True)
-            else:
+            try:
+                df = pd.DataFrame(supabase.table("licenses").select("*").execute().data)
+                if not df.empty:
+                    st.dataframe(df, use_container_width=True)
+                else:
+                    st.info("No licenses yet.")
+            except:
                 st.info("No licenses yet.")
 
 # ===================== CLIENT ACTIVATION CHECK =====================
@@ -313,7 +321,7 @@ if st.session_state.role == "client":
                 st.error("❌ Invalid Activation Key")
         st.stop()
 
-# ===================== OTHER TABS =====================
+# ===================== DASHBOARD =====================
 with selected_tabs[0]:
     st.subheader(f"Live Portfolio - {exchange_name} • {mode}")
     df, total = bot.get_portfolio()
@@ -335,6 +343,7 @@ with selected_tabs[0]:
         fig_pie = px.pie(df, values="Value (USDT)", names="Coin", title="Portfolio Allocation")
         st.plotly_chart(fig_pie, use_container_width=True)
 
+# ===================== STRATEGY =====================
 with selected_tabs[1]:
     st.subheader("⚙️ Advanced Strategy (2029 Bull Run Ready)")
     col1, col2 = st.columns(2)
@@ -351,6 +360,7 @@ with selected_tabs[1]:
     st.success("✅ All Advanced Features are **ACTIVE**")
     st.info(f"Current Strategy: **{strategy_mode}** | Auto Rebalance: **{rebalance_interval}**")
 
+# ===================== ANALYSIS =====================
 with selected_tabs[2]:
     st.subheader("📈 Advanced Real-Time Analysis")
     st.write("**Select Coins for Analysis**")
@@ -380,6 +390,7 @@ with selected_tabs[2]:
                 analysis_df = pd.DataFrame(analysis)
                 st.dataframe(analysis_df, use_container_width=True)
 
+# ===================== HISTORY =====================
 with selected_tabs[3]:
     st.subheader("📜 Portfolio History")
     if bot.portfolio_state.get("history"):
@@ -389,6 +400,7 @@ with selected_tabs[3]:
     else:
         st.info("No history yet. Run rebalance to start tracking.")
 
+# ===================== LEADERBOARD =====================
 with selected_tabs[-1]:
     st.subheader("🏆 Top Performing Clients")
     top = [
