@@ -109,37 +109,31 @@ is_licensed = check_license(machine_id)
 if not is_licensed:
     st.warning("🔑 **License Required**")
     st.info(f"**Your Machine ID:** `{machine_id}`")
-    st.info("Contact Admin to get your Activation Key.")
-
-    if st.button("🔑 Login as Admin (Bypass License)", type="primary"):
+    st.info("**📋 Copy the Machine ID above first** before clicking the button.")
+    
+    if st.button("🔑 Login as Admin (Bypass License)", type="primary", use_container_width=True):
         st.session_state.logged_in = True
         st.session_state.username = "admin"
         st.session_state.role = "admin"
+        st.success("✅ Logged in as Admin")
         st.rerun()
+    
     st.stop()
 
-# ===================== LOGIN =====================
+# ===================== LOGIN / REGISTER =====================
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
 
 if not st.session_state.logged_in:
-    # Beautiful Landing Page with Circular Logo
     st.markdown("""
         <style>
         .logo-circle {
-            width: 180px;
-            height: 180px;
-            border-radius: 50%;
+            width: 180px; height: 180px; border-radius: 50%;
             background: linear-gradient(135deg, #00ff88, #00cc66);
-            margin: 30px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 60px;
-            font-weight: bold;
-            color: #000;
+            margin: 30px auto; display: flex; align-items: center; justify-content: center;
+            font-size: 60px; font-weight: bold; color: #000;
             box-shadow: 0 15px 40px rgba(0, 255, 136, 0.5);
         }
         </style>
@@ -147,10 +141,8 @@ if not st.session_state.logged_in:
 
     st.markdown('<h1 style="text-align: center; color: #00ff88;">KMFX</h1>', unsafe_allow_html=True)
     st.markdown('<h3 style="text-align: center;">Spot Rebalancer Pro</h3>', unsafe_allow_html=True)
-
     st.markdown('<div class="logo-circle">KMFX</div>', unsafe_allow_html=True)
-
-    st.markdown("<p style='text-align: center; color: #aaaaaa; margin-top: 10px;'>Advanced Crypto Portfolio Manager for 2029 Bull Run</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #aaaaaa;'>Advanced Crypto Portfolio Manager for 2029 Bull Run</p>", unsafe_allow_html=True)
     st.markdown("---")
 
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
