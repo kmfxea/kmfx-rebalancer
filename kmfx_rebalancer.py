@@ -77,16 +77,9 @@ def load_users():
             for u, v in list(data.items()):
                 if isinstance(v, str):
                     data[u] = {
-                        "password": v,
-                        "role": "client",
-                        "machine_id": "",
-                        "email": "",
-                        "contact_number": "",
-                        "status": "pending",
-                        "activation_key": "",
-                        "kucoin_api_key": "",
-                        "kucoin_secret": "",
-                        "kucoin_password": ""
+                        "password": v, "role": "client", "machine_id": "", "email": "", 
+                        "contact_number": "", "status": "pending", "activation_key": "",
+                        "kucoin_api_key": "", "kucoin_secret": "", "kucoin_password": ""
                     }
             return data
     except:
@@ -120,20 +113,21 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
-if 'bypass_license' not in st.session_state:
-    st.session_state.bypass_license = False
 
 # ===================== LICENSE CHECK =====================
 machine_id = get_machine_id()
 is_licensed = check_license(machine_id)
 
-if not is_licensed and not st.session_state.logged_in and not st.session_state.bypass_license:
+if not is_licensed and not st.session_state.logged_in:
     st.warning("🔑 **License Required**")
     st.info(f"**Your Machine ID:** `{machine_id}`")
     st.info("**📋 Copy the Machine ID first** before clicking the button.")
     
     if st.button("🔑 Login as Admin (Bypass License)", type="primary", use_container_width=True):
-        st.session_state.bypass_license = True
+        st.session_state.logged_in = True
+        st.session_state.username = "admin"
+        st.session_state.role = "admin"
+        st.success("✅ Logged in as Admin")
         st.rerun()
     st.stop()
 
@@ -141,13 +135,9 @@ if not is_licensed and not st.session_state.logged_in and not st.session_state.b
 if not st.session_state.logged_in:
     st.markdown("""
         <style>
-        .logo-circle {
-            width: 180px; height: 180px; border-radius: 50%;
-            background: linear-gradient(135deg, #00ff88, #00cc66);
+        .logo-circle {width: 180px; height: 180px; border-radius: 50%; background: linear-gradient(135deg, #00ff88, #00cc66);
             margin: 30px auto; display: flex; align-items: center; justify-content: center;
-            font-size: 60px; font-weight: bold; color: #000;
-            box-shadow: 0 15px 40px rgba(0, 255, 136, 0.5);
-        }
+            font-size: 60px; font-weight: bold; color: #000; box-shadow: 0 15px 40px rgba(0, 255, 136, 0.5);}
         </style>
     """, unsafe_allow_html=True)
 
@@ -162,8 +152,8 @@ if not st.session_state.logged_in:
     with tab1:
         login_tab1, login_tab2 = st.tabs(["👑 Admin Login", "👤 Member Login"])
         
-        with login_tab1:
-            st.write("**Admin Login**")
+        with login_tab1:  # Admin Login
+            st.write("**Admin Login Only**")
             u = st.text_input("Username", key="admin_u")
             p = st.text_input("Password", type="password", key="admin_p")
             if st.button("Login as Admin", type="primary", use_container_width=True):
@@ -176,9 +166,9 @@ if not st.session_state.logged_in:
                     st.success("✅ Admin Login Successful!")
                     st.rerun()
                 else:
-                    st.error("❌ Invalid Admin credentials")
+                    st.error("❌ Invalid Admin credentials or not an Admin account")
 
-        with login_tab2:
+        with login_tab2:  # Member Login
             st.write("**Member / Client Login**")
             u = st.text_input("Username", key="member_u")
             p = st.text_input("Password", type="password", key="member_p")
@@ -197,7 +187,7 @@ if not st.session_state.logged_in:
                 else:
                     st.error("Invalid credentials")
 
-    with tab2:
+    with tab2:  # Register
         st.write("**Create New Account**")
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
@@ -374,6 +364,24 @@ if st.session_state.role == "admin":
                 st.dataframe(df, use_container_width=True)
             else:
                 st.info("No licenses yet.")
+
+# ===================== CLIENT ACTIVATION CHECK =====================
+users = load_users()
+current_user = users.get(st.session_state.username, {})
+if st.session_state.role == "client" and current_user.get("status") != "approved":
+    st.error("❌ Your account is not yet approved by Admin.")
+    st.stop()
+
+if st.session_state.role == "client" and not current_user.get("activation_key"):
+    st.warning("🔑 **Activation Required**")
+    activation_input = st.text_input("Enter your Activation Key")
+    if st.button("Activate Account", type="primary"):
+        if activation_input == current_user.get("activation_key"):
+            st.success("✅ Account Activated Successfully!")
+            st.rerun()
+        else:
+            st.error("❌ Invalid Activation Key")
+    st.stop()
 
 # ===================== OTHER TABS =====================
 with selected_tabs[0]:
