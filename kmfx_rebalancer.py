@@ -173,20 +173,21 @@ mode = st.sidebar.radio("Trading Mode", ["Paper Trading", "Real Trading"], horiz
 rebalance_interval = st.sidebar.selectbox("Auto Rebalance Schedule", ["Manual", "Every 2 Hours", "Every 6 Hours", "Every 12 Hours", "Daily"])
 
 st.sidebar.subheader("🔑 KuCoin API Keys")
-api_key = st.sidebar.text_input("API Key", type="password")
-api_secret = st.sidebar.text_input("API Secret", type="password")
-api_pass = st.sidebar.text_input("Passphrase", type="password")
+api_key = st.sidebar.text_input("API Key", type="password", value="")
+api_secret = st.sidebar.text_input("API Secret", type="password", value="")
+api_pass = st.sidebar.text_input("Passphrase", type="password", value="")
 
-if st.sidebar.button("💾 Save & Test API"):
+if st.sidebar.button("💾 Save & Test API", type="primary"):
     if api_key and api_secret and api_pass:
         supabase.table("users").update({
             "kucoin_api_key": api_key,
             "kucoin_secret": api_secret,
             "kucoin_password": api_pass
         }).eq("username", st.session_state.username).execute()
-        st.sidebar.success("✅ API Keys Saved!")
+        st.sidebar.success("✅ API Keys Saved & Activated!")
+        st.rerun()
     else:
-        st.sidebar.warning("Please fill all fields")
+        st.sidebar.error("Please fill all API fields")
 
 # ===================== REBALANCER =====================
 class KMFXRebalancer:
@@ -194,9 +195,8 @@ class KMFXRebalancer:
         self.mode = "paper" if "Paper" in mode else "real"
         self.exchange = None
         self.username = st.session_state.username
-        self.portfolio_state = {"positions": {}, "last_rebalance": None, "history": []}  # FIXED HERE
+        self.portfolio_state = {"positions": {}, "last_rebalance": None, "history": []}
 
-        # Load API keys from Supabase
         user_resp = supabase.table("users").select("kucoin_api_key, kucoin_secret, kucoin_password").eq("username", self.username).execute()
         if user_resp.data:
             ud = user_resp.data[0]
@@ -223,7 +223,7 @@ class KMFXRebalancer:
                     ticker = self.exchange.fetch_ticker(sym)
                     price = ticker['last']
                     bal = self.exchange.fetch_balance()
-                    qty = float(bal.get(coin, {}).get('free', 0))
+                    qty = float(bal.get(coin, {}).get('free', 0) or 0)
                 else:
                     price = 62000 if coin == "BTC" else 3200 if coin == "ETH" else 150
                     qty = 0.05 if coin == "BTC" else 1.5
@@ -245,7 +245,7 @@ class KMFXRebalancer:
             return "✅ Paper Trading Simulation Successful!"
         else:
             if self.exchange:
-                return "✅ Real Rebalance Executed!"
+                return "✅ Real Rebalance Executed on KuCoin!"
             else:
                 return "❌ Please setup and save your API Keys first!"
 
@@ -414,5 +414,5 @@ with selected_tabs[-1]:
     st.dataframe(pd.DataFrame(top), use_container_width=True)
 
 st.caption("KMFX Spot Rebalancer Pro • Final Working Version")
-time.sleep(10)
+time.sleep(8)
 st.rerun()
