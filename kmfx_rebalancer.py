@@ -102,30 +102,30 @@ def save_portfolio_state(username, state):
     with open(PORTFOLIO_FILE, 'w') as f:
         json.dump(all_data, f, indent=2)
 
-# ===================== LICENSE CHECK =====================
-machine_id = get_machine_id()
-is_licensed = check_license(machine_id)
-
-if not is_licensed:
-    st.warning("🔑 **License Required**")
-    st.info(f"**Your Machine ID:** `{machine_id}`")
-    st.info("**📋 Copy the Machine ID above first** before clicking the button.")
-    
-    if st.button("🔑 Login as Admin (Bypass License)", type="primary", use_container_width=True):
-        st.session_state.logged_in = True
-        st.session_state.username = "admin"
-        st.session_state.role = "admin"
-        st.success("✅ Logged in as Admin")
-        st.rerun()
-    
-    st.stop()
-
-# ===================== LOGIN / REGISTER =====================
+# ===================== SESSION STATE =====================
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
+if 'bypass_to_login' not in st.session_state:
+    st.session_state.bypass_to_login = False
 
+# ===================== LICENSE CHECK =====================
+machine_id = get_machine_id()
+is_licensed = check_license(machine_id)
+
+if not is_licensed and not st.session_state.logged_in and not st.session_state.bypass_to_login:
+    st.warning("🔑 **License Required**")
+    st.info(f"**Your Machine ID:** `{machine_id}`")
+    st.info("**📋 Copy the Machine ID first** before clicking the button.")
+    
+    if st.button("🔑 Login as Admin (Bypass License)", type="primary", use_container_width=True):
+        st.session_state.bypass_to_login = True
+        st.rerun()
+    
+    st.stop()
+
+# ===================== LOGIN / REGISTER PAGE =====================
 if not st.session_state.logged_in:
     st.markdown("""
         <style>
@@ -150,8 +150,8 @@ if not st.session_state.logged_in:
     with tab1:
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
+            u = st.text_input("Username", key="login_user")
+            p = st.text_input("Password", type="password", key="login_pass")
             if st.button("Login", type="primary", use_container_width=True):
                 users = load_users()
                 hashed = hashlib.sha256(p.encode()).hexdigest()
@@ -193,6 +193,7 @@ if not st.session_state.logged_in:
 # ===================== AFTER LOGIN =====================
 if st.button("🚪 Logout"):
     st.session_state.logged_in = False
+    st.session_state.bypass_to_login = False
     st.rerun()
 
 st.title("🚀 KMFX Spot Rebalancer Pro")
