@@ -176,7 +176,6 @@ if not st.session_state.logged_in:
                         st.session_state.logged_in = True
                         st.session_state.username = u
                         st.session_state.role = "client"
-                        # Load saved API keys
                         st.session_state.api_key = users[u].get("kucoin_api_key", "")
                         st.session_state.api_secret = users[u].get("kucoin_secret", "")
                         st.session_state.api_pass = users[u].get("kucoin_password", "")
@@ -243,18 +242,26 @@ api_key = st.sidebar.text_input("API Key", value=st.session_state.api_key, type=
 api_secret = st.sidebar.text_input("API Secret", value=st.session_state.api_secret, type="password")
 api_pass = st.sidebar.text_input("Passphrase", value=st.session_state.api_pass, type="password")
 
+# Proxy support for Philippines users
+proxy_url = st.sidebar.text_input("🌏 Proxy URL (Optional - Philippines IP)", placeholder="http://your-proxy-ip:port", help="Use this if you get US IP blocked error")
+
 if st.sidebar.button("💾 Save & Test API", type="primary", use_container_width=True):
     if api_key and api_secret and api_pass:
         try:
-            test_exchange = ccxt.kucoin({
+            config = {
                 'apiKey': api_key,
                 'secret': api_secret,
                 'password': api_pass,
                 'enableRateLimit': True,
                 'options': {'defaultType': 'spot'}
-            })
-            test_exchange.fetch_ticker("BTC/USDT")  # Test connection
+            }
+            if proxy_url:
+                config['proxies'] = {'http': proxy_url, 'https': proxy_url}
+
+            test_exchange = ccxt.kucoin(config)
+            test_exchange.fetch_ticker("BTC/USDT")
             
+            # Save to user file
             users = load_users()
             users[st.session_state.username].update({
                 "kucoin_api_key": api_key,
@@ -267,9 +274,13 @@ if st.sidebar.button("💾 Save & Test API", type="primary", use_container_width
             st.session_state.api_secret = api_secret
             st.session_state.api_pass = api_pass
             
-            st.sidebar.success("✅ API Keys Saved & Connection Tested Successfully!")
+            st.sidebar.success("✅ API Keys Saved & Tested Successfully!")
         except Exception as e:
-            st.sidebar.error(f"❌ API Test Failed: {str(e)}")
+            error_str = str(e)
+            if "400302" in error_str or "U.S." in error_str:
+                st.sidebar.error("❌ KuCoin blocked US server IP. Please use a Philippines proxy above.")
+            else:
+                st.sidebar.error(f"❌ API Test Failed: {error_str}")
     else:
         st.sidebar.warning("Please fill all API fields")
 
@@ -283,17 +294,22 @@ class KMFXRebalancer:
        
         users = load_users()
         user_data = users.get(self.username, {})
-        if user_data.get("kucoin_api_key"):
+        
+        if self.mode == "real" and user_data.get("kucoin_api_key"):
             try:
-                self.exchange = ccxt.kucoin({
+                config = {
                     'apiKey': user_data["kucoin_api_key"],
                     'secret': user_data["kucoin_secret"],
                     'password': user_data["kucoin_password"],
                     'enableRateLimit': True,
                     'options': {'defaultType': 'spot'}
-                })
+                }
+                if proxy_url:
+                    config['proxies'] = {'http': proxy_url, 'https': proxy_url}
+                
+                self.exchange = ccxt.kucoin(config)
             except:
-                pass
+                self.mode = "paper"
 
     def get_portfolio(self):
         symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "DOGE/USDT", "ADA/USDT", "AVAX/USDT", "LINK/USDT", "TON/USDT"]
@@ -404,7 +420,7 @@ if st.session_state.role == "client" and not current_user.get("activation_key"):
             st.error("❌ Invalid Activation Key")
     st.stop()
 
-# ===================== OTHER TABS =====================
+# ===================== DASHBOARD =====================
 with selected_tabs[0]:
     st.subheader(f"Live Portfolio - {exchange_name} • {mode}")
     df, total = bot.get_portfolio()
@@ -490,6 +506,6 @@ with selected_tabs[-1]:
     ]
     st.dataframe(pd.DataFrame(top), use_container_width=True)
 
-st.caption("KMFX Spot Rebalancer Pro • Final Working Version")
+st.caption("KMFX Spot Rebalancer Pro • Full Fixed Version for Philippines Users")
 time.sleep(10)
 st.rerun()
