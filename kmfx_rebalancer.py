@@ -122,10 +122,9 @@ if not is_licensed and not st.session_state.logged_in and not st.session_state.b
     if st.button("🔑 Login as Admin (Bypass License)", type="primary", use_container_width=True):
         st.session_state.bypass_to_login = True
         st.rerun()
-    
     st.stop()
 
-# ===================== LOGIN / REGISTER PAGE =====================
+# ===================== LOGIN / REGISTER =====================
 if not st.session_state.logged_in:
     st.markdown("""
         <style>
@@ -150,8 +149,8 @@ if not st.session_state.logged_in:
     with tab1:
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
-            u = st.text_input("Username", key="login_user")
-            p = st.text_input("Password", type="password", key="login_pass")
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
             if st.button("Login", type="primary", use_container_width=True):
                 users = load_users()
                 hashed = hashlib.sha256(p.encode()).hexdigest()
@@ -221,6 +220,9 @@ class KMFXRebalancer:
     def __init__(self):
         self.mode = "paper" if "Paper" in mode else "real"
         self.exchange = None
+        self.username = st.session_state.username
+        self.portfolio_state = load_portfolio_state(self.username)   # ← FIXED HERE
+        
         if self.mode == "real" and api_key and api_secret and api_pass:
             try:
                 self.exchange = ccxt.kucoin({
