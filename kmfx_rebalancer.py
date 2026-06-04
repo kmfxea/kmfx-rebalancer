@@ -13,16 +13,14 @@ from supabase import create_client, Client
 
 load_dotenv()
 
-st.set_page_config(page_title="KMFX Rebalancer Pro", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="KMFX Rebalancer Pro", layout="wide", initial_sidebar_state="expanded")
 
 # ===================== SUPABASE =====================
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
 if not SUPABASE_URL or not SUPABASE_KEY:
     st.error("❌ Supabase URL and Key not found in .env")
     st.stop()
-
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ===================== LICENSE SYSTEM =====================
@@ -77,7 +75,7 @@ def load_users():
             for u, v in list(data.items()):
                 if isinstance(v, str):
                     data[u] = {
-                        "password": v, "role": "client", "machine_id": "", "email": "", 
+                        "password": v, "role": "client", "machine_id": "", "email": "",
                         "contact_number": "", "status": "pending", "activation_key": "",
                         "kucoin_api_key": "", "kucoin_secret": "", "kucoin_password": ""
                     }
@@ -113,16 +111,18 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
+    st.session_state.api_key = ""
+    st.session_state.api_secret = ""
+    st.session_state.api_pass = ""
 
 # ===================== LICENSE CHECK =====================
 machine_id = get_machine_id()
 is_licensed = check_license(machine_id)
-
 if not is_licensed and not st.session_state.logged_in:
     st.warning("🔑 **License Required**")
     st.info(f"**Your Machine ID:** `{machine_id}`")
     st.info("**📋 Copy the Machine ID first** before clicking the button.")
-    
+   
     if st.button("🔑 Login as Admin (Bypass License)", type="primary", use_container_width=True):
         st.session_state.logged_in = True
         st.session_state.username = "admin"
@@ -140,19 +140,16 @@ if not st.session_state.logged_in:
             font-size: 60px; font-weight: bold; color: #000; box-shadow: 0 15px 40px rgba(0, 255, 136, 0.5);}
         </style>
     """, unsafe_allow_html=True)
-
     st.markdown('<h1 style="text-align: center; color: #00ff88;">KMFX</h1>', unsafe_allow_html=True)
     st.markdown('<h3 style="text-align: center;">Spot Rebalancer Pro</h3>', unsafe_allow_html=True)
     st.markdown('<div class="logo-circle">KMFX</div>', unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #aaaaaa;'>Advanced Crypto Portfolio Manager for 2029 Bull Run</p>", unsafe_allow_html=True)
     st.markdown("---")
-
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
-
     with tab1:
         login_tab1, login_tab2 = st.tabs(["👑 Admin Login", "👤 Member Login"])
-        
-        with login_tab1:  # Admin Login
+       
+        with login_tab1: # Admin Login
             st.write("**Admin Login Only**")
             u = st.text_input("Username", key="admin_u")
             p = st.text_input("Password", type="password", key="admin_p")
@@ -167,8 +164,7 @@ if not st.session_state.logged_in:
                     st.rerun()
                 else:
                     st.error("❌ Invalid Admin credentials or not an Admin account")
-
-        with login_tab2:  # Member Login
+        with login_tab2: # Member Login
             st.write("**Member / Client Login**")
             u = st.text_input("Username", key="member_u")
             p = st.text_input("Password", type="password", key="member_p")
@@ -180,14 +176,17 @@ if not st.session_state.logged_in:
                         st.session_state.logged_in = True
                         st.session_state.username = u
                         st.session_state.role = "client"
+                        # Load saved API keys
+                        st.session_state.api_key = users[u].get("kucoin_api_key", "")
+                        st.session_state.api_secret = users[u].get("kucoin_secret", "")
+                        st.session_state.api_pass = users[u].get("kucoin_password", "")
                         st.success("✅ Login Successful!")
                         st.rerun()
                     else:
                         st.error("❌ Your account is not yet approved by Admin")
                 else:
                     st.error("Invalid credentials")
-
-    with tab2:  # Register
+    with tab2: # Register
         st.write("**Create New Account**")
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
@@ -198,7 +197,6 @@ if not st.session_state.logged_in:
             email = st.text_input("Email Address")
             contact = st.text_input("Contact Number")
             machine_id_input = st.text_input("Machine ID (Required for Client)", placeholder="Paste your copied Machine ID here") if role == "Client" else ""
-
             if st.button("Create Account", type="primary", use_container_width=True):
                 if np == cp and nu and email:
                     if role == "Client" and not machine_id_input.strip():
@@ -241,13 +239,37 @@ mode = st.sidebar.radio("Trading Mode", ["Paper Trading", "Real Trading"], horiz
 rebalance_interval = st.sidebar.selectbox("Auto Rebalance Schedule", ["Manual", "Every 2 Hours", "Every 6 Hours", "Every 12 Hours", "Daily"])
 
 st.sidebar.subheader("🔑 KuCoin API Keys")
-api_key = st.sidebar.text_input("API Key", type="password")
-api_secret = st.sidebar.text_input("API Secret", type="password")
-api_pass = st.sidebar.text_input("Passphrase", type="password")
+api_key = st.sidebar.text_input("API Key", value=st.session_state.api_key, type="password")
+api_secret = st.sidebar.text_input("API Secret", value=st.session_state.api_secret, type="password")
+api_pass = st.sidebar.text_input("Passphrase", value=st.session_state.api_pass, type="password")
 
-if st.sidebar.button("💾 Save & Test API"):
+if st.sidebar.button("💾 Save & Test API", type="primary", use_container_width=True):
     if api_key and api_secret and api_pass:
-        st.sidebar.success("✅ API Keys Saved & Activated!")
+        try:
+            test_exchange = ccxt.kucoin({
+                'apiKey': api_key,
+                'secret': api_secret,
+                'password': api_pass,
+                'enableRateLimit': True,
+                'options': {'defaultType': 'spot'}
+            })
+            test_exchange.fetch_ticker("BTC/USDT")  # Test connection
+            
+            users = load_users()
+            users[st.session_state.username].update({
+                "kucoin_api_key": api_key,
+                "kucoin_secret": api_secret,
+                "kucoin_password": api_pass
+            })
+            save_users(users)
+            
+            st.session_state.api_key = api_key
+            st.session_state.api_secret = api_secret
+            st.session_state.api_pass = api_pass
+            
+            st.sidebar.success("✅ API Keys Saved & Connection Tested Successfully!")
+        except Exception as e:
+            st.sidebar.error(f"❌ API Test Failed: {str(e)}")
     else:
         st.sidebar.warning("Please fill all API fields")
 
@@ -258,13 +280,15 @@ class KMFXRebalancer:
         self.exchange = None
         self.username = st.session_state.username
         self.portfolio_state = load_portfolio_state(self.username)
-        
-        if self.mode == "real" and api_key and api_secret and api_pass:
+       
+        users = load_users()
+        user_data = users.get(self.username, {})
+        if user_data.get("kucoin_api_key"):
             try:
                 self.exchange = ccxt.kucoin({
-                    'apiKey': api_key,
-                    'secret': api_secret,
-                    'password': api_pass,
+                    'apiKey': user_data["kucoin_api_key"],
+                    'secret': user_data["kucoin_secret"],
+                    'password': user_data["kucoin_password"],
                     'enableRateLimit': True,
                     'options': {'defaultType': 'spot'}
                 })
@@ -314,19 +338,18 @@ bot = KMFXRebalancer()
 tabs_list = ["📊 Dashboard", "⚙️ Strategy", "📈 Analysis", "📜 History", "👥 Leaderboard"]
 if st.session_state.role == "admin":
     tabs_list.insert(4, "🔑 Admin Panel")
-
 selected_tabs = st.tabs(tabs_list)
 
 # ===================== ADMIN PANEL =====================
 if st.session_state.role == "admin":
     with selected_tabs[4]:
         admin_tab1, admin_tab2 = st.tabs(["Pending Users", "All Licenses"])
-        
+       
         with admin_tab1:
             st.subheader("📋 Pending User Approvals")
             users = load_users()
             pending = {k: v for k, v in users.items() if v.get("status") == "pending"}
-            
+           
             if pending:
                 for username, info in pending.items():
                     with st.expander(f"👤 {username}"):
@@ -356,7 +379,6 @@ if st.session_state.role == "admin":
                                     st.rerun()
             else:
                 st.info("No pending users.")
-
         with admin_tab2:
             st.subheader("🔑 All Licenses")
             df = get_all_licenses()
@@ -371,7 +393,6 @@ current_user = users.get(st.session_state.username, {})
 if st.session_state.role == "client" and current_user.get("status") != "approved":
     st.error("❌ Your account is not yet approved by Admin.")
     st.stop()
-
 if st.session_state.role == "client" and not current_user.get("activation_key"):
     st.warning("🔑 **Activation Required**")
     activation_input = st.text_input("Enter your Activation Key")
