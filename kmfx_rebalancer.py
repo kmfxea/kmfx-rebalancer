@@ -25,88 +25,12 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ===================== LICENSE SYSTEM =====================
+# ===================== HELPERS =====================
 def get_machine_id():
     return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()[:16].upper()
 
-def check_license(machine_id):
-    try:
-        response = supabase.table("licenses").select("*").eq("machine_id", machine_id).execute()
-        if response.data:
-            lic = response.data[0]
-            expiry = datetime.fromisoformat(lic['expiry_date'].replace('Z', '+00:00'))
-            if lic['status'] == 'active' and expiry > datetime.now():
-                return True
-        return False
-    except:
-        return False
-
-def create_license(machine_id, username, days=365):
-    activation_key = f"KMFX-{hashlib.sha256(str(uuid.uuid4()).encode()).hexdigest()[:8].upper()}"
-    expiry = datetime.now() + timedelta(days=days)
-    data = {
-        "machine_id": machine_id,
-        "activation_key": activation_key,
-        "username": username,
-        "plan_type": "trial" if days <= 90 else "1year" if days <= 365 else "lifetime",
-        "expiry_date": expiry.isoformat(),
-        "status": "active"
-    }
-    try:
-        supabase.table("licenses").insert(data).execute()
-        return activation_key, expiry
-    except:
-        return None, None
-
-def get_all_licenses():
-    try:
-        response = supabase.table("licenses").select("*").order("created_at", desc=True).execute()
-        return pd.DataFrame(response.data)
-    except:
-        return pd.DataFrame()
-
-# ===================== USER DATA =====================
-USER_FILE = "data/users.json"
-PORTFOLIO_FILE = "data/portfolio_state.json"
-
-def load_users():
-    os.makedirs('data', exist_ok=True)
-    try:
-        with open(USER_FILE, 'r') as f:
-            data = json.load(f)
-            for u, v in list(data.items()):
-                if isinstance(v, str):
-                    data[u] = {
-                        "password": v, "role": "client", "machine_id": "", "email": "", 
-                        "contact_number": "", "status": "pending", "activation_key": "",
-                        "kucoin_api_key": "", "kucoin_secret": "", "kucoin_password": ""
-                    }
-            return data
-    except:
-        return {}
-
-def save_users(users):
-    os.makedirs('data', exist_ok=True)
-    with open(USER_FILE, 'w') as f:
-        json.dump(users, f, indent=2)
-
-def load_portfolio_state(username):
-    try:
-        with open(PORTFOLIO_FILE, 'r') as f:
-            return json.load(f).get(username, {"positions": {}, "last_rebalance": None, "history": []})
-    except:
-        return {"positions": {}, "last_rebalance": None, "history": []}
-
-def save_portfolio_state(username, state):
-    os.makedirs('data', exist_ok=True)
-    try:
-        with open(PORTFOLIO_FILE, 'r') as f:
-            all_data = json.load(f)
-    except:
-        all_data = {}
-    all_data[username] = state
-    with open(PORTFOLIO_FILE, 'w') as f:
-        json.dump(all_data, f, indent=2)
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
 # ===================== SESSION STATE =====================
 if 'logged_in' not in st.session_state:
@@ -116,7 +40,16 @@ if 'logged_in' not in st.session_state:
 
 # ===================== LICENSE CHECK =====================
 machine_id = get_machine_id()
-is_licensed = check_license(machine_id)
+is_licensed = False
+try:
+    response = supabase.table("licenses").select("*").eq("machine_id", machine_id).execute()
+    if response.data:
+        lic = response.data[0]
+        expiry = datetime.fromisoformat(lic['expiry_date'].replace('Z', '+00:00'))
+        if lic['status'] == 'active' and expiry > datetime.now():
+            is_licensed = True
+except:
+    pass
 
 if not is_licensed and not st.session_state.logged_in:
     st.warning("🔑 **License Required**")
@@ -152,31 +85,30 @@ if not st.session_state.logged_in:
     with tab1:
         login_tab1, login_tab2 = st.tabs(["👑 Admin Login", "👤 Member Login"])
         
-        with login_tab1:  # Admin Login
+        with login_tab1:
             st.write("**Admin Login Only**")
             u = st.text_input("Username", key="admin_u")
             p = st.text_input("Password", type="password", key="admin_p")
             if st.button("Login as Admin", type="primary", use_container_width=True):
-                users = load_users()
-                hashed = hashlib.sha256(p.encode()).hexdigest()
-                if u in users and users[u].get("password") == hashed and users[u].get("role") == "admin":
+                resp = supabase.table("users").select("*").eq("username", u).execute()
+                if resp.data and resp.data[0]['password'] == hash_password(p) and resp.data[0]['role'] == "admin":
                     st.session_state.logged_in = True
                     st.session_state.username = u
                     st.session_state.role = "admin"
                     st.success("✅ Admin Login Successful!")
                     st.rerun()
                 else:
-                    st.error("❌ Invalid Admin credentials or not an Admin account")
+                    st.error("❌ Invalid Admin credentials")
 
-        with login_tab2:  # Member Login
+        with login_tab2:
             st.write("**Member / Client Login**")
             u = st.text_input("Username", key="member_u")
             p = st.text_input("Password", type="password", key="member_p")
             if st.button("Login as Member", type="primary", use_container_width=True):
-                users = load_users()
-                hashed = hashlib.sha256(p.encode()).hexdigest()
-                if u in users and users[u].get("password") == hashed:
-                    if users[u].get("status") == "approved":
+                resp = supabase.table("users").select("*").eq("username", u).execute()
+                if resp.data and resp.data[0]['password'] == hash_password(p):
+                    user = resp.data[0]
+                    if user.get("status") == "approved":
                         st.session_state.logged_in = True
                         st.session_state.username = u
                         st.session_state.role = "client"
@@ -187,7 +119,7 @@ if not st.session_state.logged_in:
                 else:
                     st.error("Invalid credentials")
 
-    with tab2:  # Register
+    with tab2:
         st.write("**Create New Account**")
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
@@ -204,24 +136,21 @@ if not st.session_state.logged_in:
                     if role == "Client" and not machine_id_input.strip():
                         st.error("❌ Machine ID is required for Client accounts")
                     else:
-                        users = load_users()
-                        if nu not in users:
-                            users[nu] = {
-                                "password": hashlib.sha256(np.encode()).hexdigest(),
+                        existing = supabase.table("users").select("username").eq("username", nu).execute()
+                        if existing.data:
+                            st.error("Username already exists")
+                        else:
+                            data = {
+                                "username": nu,
+                                "password": hash_password(np),
                                 "role": role.lower(),
                                 "machine_id": machine_id_input.strip(),
                                 "email": email,
                                 "contact_number": contact,
-                                "status": "approved" if role == "Admin" else "pending",
-                                "activation_key": "",
-                                "kucoin_api_key": "",
-                                "kucoin_secret": "",
-                                "kucoin_password": ""
+                                "status": "approved" if role == "Admin" else "pending"
                             }
-                            save_users(users)
+                            supabase.table("users").insert(data).execute()
                             st.success(f"✅ {role} Account Created Successfully!")
-                        else:
-                            st.error("Username already exists")
                 else:
                     st.error("Please fill all required fields")
     st.stop()
@@ -234,12 +163,7 @@ if st.button("🚪 Logout"):
 st.title("🚀 KMFX Spot Rebalancer Pro")
 st.sidebar.success(f"👤 {st.session_state.username} | {st.session_state.role.upper()}")
 
-# ===================== SIDEBAR =====================
-st.sidebar.subheader("⚙️ Trading Settings")
-exchange_name = st.sidebar.selectbox("Exchange", ["KuCoin", "Binance"])
-mode = st.sidebar.radio("Trading Mode", ["Paper Trading", "Real Trading"], horizontal=True)
-rebalance_interval = st.sidebar.selectbox("Auto Rebalance Schedule", ["Manual", "Every 2 Hours", "Every 6 Hours", "Every 12 Hours", "Daily"])
-
+# ===================== SIDEBAR API KEYS =====================
 st.sidebar.subheader("🔑 KuCoin API Keys")
 api_key = st.sidebar.text_input("API Key", type="password")
 api_secret = st.sidebar.text_input("API Secret", type="password")
@@ -247,9 +171,14 @@ api_pass = st.sidebar.text_input("Passphrase", type="password")
 
 if st.sidebar.button("💾 Save & Test API"):
     if api_key and api_secret and api_pass:
-        st.sidebar.success("✅ API Keys Saved & Activated!")
+        supabase.table("users").update({
+            "kucoin_api_key": api_key,
+            "kucoin_secret": api_secret,
+            "kucoin_password": api_pass
+        }).eq("username", st.session_state.username).execute()
+        st.sidebar.success("✅ API Keys Saved!")
     else:
-        st.sidebar.warning("Please fill all API fields")
+        st.sidebar.warning("Please fill all fields")
 
 # ===================== REBALANCER =====================
 class KMFXRebalancer:
@@ -257,19 +186,22 @@ class KMFXRebalancer:
         self.mode = "paper" if "Paper" in mode else "real"
         self.exchange = None
         self.username = st.session_state.username
-        self.portfolio_state = load_portfolio_state(self.username)
-        
-        if self.mode == "real" and api_key and api_secret and api_pass:
-            try:
-                self.exchange = ccxt.kucoin({
-                    'apiKey': api_key,
-                    'secret': api_secret,
-                    'password': api_pass,
-                    'enableRateLimit': True,
-                    'options': {'defaultType': 'spot'}
-                })
-            except:
-                pass
+
+        # Load API keys from Supabase
+        user_resp = supabase.table("users").select("kucoin_api_key, kucoin_secret, kucoin_password").eq("username", self.username).execute()
+        if user_resp.data:
+            ud = user_resp.data[0]
+            if self.mode == "real" and ud.get("kucoin_api_key"):
+                try:
+                    self.exchange = ccxt.kucoin({
+                        'apiKey': ud['kucoin_api_key'],
+                        'secret': ud['kucoin_secret'],
+                        'password': ud['kucoin_password'],
+                        'enableRateLimit': True,
+                        'options': {'defaultType': 'spot'}
+                    })
+                except:
+                    pass
 
     def get_portfolio(self):
         symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "DOGE/USDT", "ADA/USDT", "AVAX/USDT", "LINK/USDT", "TON/USDT"]
@@ -324,34 +256,30 @@ if st.session_state.role == "admin":
         
         with admin_tab1:
             st.subheader("📋 Pending User Approvals")
-            users = load_users()
-            pending = {k: v for k, v in users.items() if v.get("status") == "pending"}
-            
+            resp = supabase.table("users").select("*").eq("status", "pending").execute()
+            pending = resp.data if resp.data else []
             if pending:
-                for username, info in pending.items():
-                    with st.expander(f"👤 {username}"):
-                        st.write(f"**Email:** {info.get('email', 'N/A')}")
-                        st.write(f"**Contact:** {info.get('contact_number', 'N/A')}")
-                        st.write(f"**Machine ID:** {info.get('machine_id', 'N/A')}")
+                for user in pending:
+                    with st.expander(f"👤 {user['username']}"):
+                        st.write(f"**Email:** {user.get('email', 'N/A')}")
+                        st.write(f"**Contact:** {user.get('contact_number', 'N/A')}")
+                        st.write(f"**Machine ID:** {user.get('machine_id', 'N/A')}")
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            if st.button("✅ Approve", key=f"app_{username}"):
-                                users[username]["status"] = "approved"
-                                save_users(users)
-                                st.success(f"Approved {username}")
+                            if st.button("✅ Approve", key=f"app_{user['username']}"):
+                                supabase.table("users").update({"status": "approved"}).eq("username", user['username']).execute()
+                                st.success(f"Approved {user['username']}")
                                 st.rerun()
                         with col2:
-                            if st.button("❌ Reject", key=f"rej_{username}"):
-                                users[username]["status"] = "rejected"
-                                save_users(users)
-                                st.error(f"Rejected {username}")
+                            if st.button("❌ Reject", key=f"rej_{user['username']}"):
+                                supabase.table("users").update({"status": "rejected"}).eq("username", user['username']).execute()
+                                st.error(f"Rejected {user['username']}")
                                 st.rerun()
                         with col3:
-                            key = st.text_input("Activation Key", key=f"key_{username}")
-                            if st.button("Assign Key", key=f"assign_{username}"):
+                            key = st.text_input("Activation Key", key=f"key_{user['username']}")
+                            if st.button("Assign Key", key=f"assign_{user['username']}"):
                                 if key:
-                                    users[username]["activation_key"] = key
-                                    save_users(users)
+                                    supabase.table("users").update({"activation_key": key}).eq("username", user['username']).execute()
                                     st.success("Activation Key Assigned!")
                                     st.rerun()
             else:
@@ -366,22 +294,22 @@ if st.session_state.role == "admin":
                 st.info("No licenses yet.")
 
 # ===================== CLIENT ACTIVATION CHECK =====================
-users = load_users()
-current_user = users.get(st.session_state.username, {})
-if st.session_state.role == "client" and current_user.get("status") != "approved":
-    st.error("❌ Your account is not yet approved by Admin.")
-    st.stop()
-
-if st.session_state.role == "client" and not current_user.get("activation_key"):
-    st.warning("🔑 **Activation Required**")
-    activation_input = st.text_input("Enter your Activation Key")
-    if st.button("Activate Account", type="primary"):
-        if activation_input == current_user.get("activation_key"):
-            st.success("✅ Account Activated Successfully!")
-            st.rerun()
-        else:
-            st.error("❌ Invalid Activation Key")
-    st.stop()
+if st.session_state.role == "client":
+    user_resp = supabase.table("users").select("*").eq("username", st.session_state.username).execute()
+    user = user_resp.data[0] if user_resp.data else {}
+    if user.get("status") != "approved":
+        st.error("❌ Your account is not yet approved by Admin.")
+        st.stop()
+    if not user.get("activation_key"):
+        st.warning("🔑 **Activation Required**")
+        activation_input = st.text_input("Enter your Activation Key")
+        if st.button("Activate Account", type="primary"):
+            if activation_input == user.get("activation_key"):
+                st.success("✅ Account Activated!")
+                st.rerun()
+            else:
+                st.error("❌ Invalid Activation Key")
+        st.stop()
 
 # ===================== OTHER TABS =====================
 with selected_tabs[0]:
