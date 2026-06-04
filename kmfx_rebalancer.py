@@ -2,11 +2,10 @@ import ccxt
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import json
-import time
 import hashlib
-import os
 import uuid
+import time
+import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -68,9 +67,13 @@ if not is_licensed and not st.session_state.logged_in:
 if not st.session_state.logged_in:
     st.markdown("""
         <style>
-        .logo-circle {width: 180px; height: 180px; border-radius: 50%; background: linear-gradient(135deg, #00ff88, #00cc66);
+        .logo-circle {
+            width: 180px; height: 180px; border-radius: 50%;
+            background: linear-gradient(135deg, #00ff88, #00cc66);
             margin: 30px auto; display: flex; align-items: center; justify-content: center;
-            font-size: 60px; font-weight: bold; color: #000; box-shadow: 0 15px 40px rgba(0, 255, 136, 0.5);}
+            font-size: 60px; font-weight: bold; color: #000;
+            box-shadow: 0 15px 40px rgba(0, 255, 136, 0.5);
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -187,7 +190,6 @@ class KMFXRebalancer:
         self.exchange = None
         self.username = st.session_state.username
 
-        # Load API keys from Supabase
         user_resp = supabase.table("users").select("kucoin_api_key, kucoin_secret, kucoin_password").eq("username", self.username).execute()
         if user_resp.data:
             ud = user_resp.data[0]
