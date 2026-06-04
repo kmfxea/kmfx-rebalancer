@@ -13,7 +13,7 @@ from supabase import create_client, Client
 
 load_dotenv()
 
-st.set_page_config(page_title="KMFX Rebalancer Pro", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="KMFX Rebalancer Pro", layout="centered", initial_sidebar_state="collapsed")
 
 # ===================== SUPABASE =====================
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -36,10 +36,10 @@ def check_license(machine_id):
             lic = response.data[0]
             expiry = datetime.fromisoformat(lic['expiry_date'].replace('Z', '+00:00'))
             if lic['status'] == 'active' and expiry > datetime.now():
-                return True, lic
-        return False, None
+                return True
+        return False
     except:
-        return False, None
+        return False
 
 def create_license(machine_id, username, days=365):
     activation_key = f"KMFX-{hashlib.sha256(str(uuid.uuid4()).encode()).hexdigest()[:8].upper()}"
@@ -76,7 +76,7 @@ def load_users():
             data = json.load(f)
             for u, v in list(data.items()):
                 if isinstance(v, str):
-                    data[u] = {"password": v, "kucoin_api_key": "", "kucoin_secret": "", "kucoin_password": "", "role": "client"}
+                    data[u] = {"password": v, "role": "client"}
             return data
     except:
         return {}
@@ -104,7 +104,7 @@ def save_portfolio_state(username, state):
 
 # ===================== LICENSE CHECK =====================
 machine_id = get_machine_id()
-is_licensed, _ = check_license(machine_id)
+is_licensed = check_license(machine_id)
 
 if not is_licensed and st.session_state.get("username", "").lower() != "admin":
     st.warning("🔑 **License Required**")
@@ -119,49 +119,88 @@ if 'logged_in' not in st.session_state:
     st.session_state.role = ""
 
 if not st.session_state.logged_in:
-    st.title("🚀 KMFX Rebalancer Pro")
+    # ===================== BEAUTIFUL LANDING PAGE =====================
+    st.markdown("""
+        <style>
+        .logo-circle {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00ff88, #00cc66);
+            margin: 30px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 55px;
+            font-weight: bold;
+            color: #000;
+            box-shadow: 0 15px 40px rgba(0, 255, 136, 0.4);
+        }
+        .title {text-align: center; color: #00ff88; font-size: 2.8em; margin-bottom: 5px;}
+        .subtitle {text-align: center; color: #ffffff; font-size: 1.3em;}
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<h1 class="title">KMFX</h1>', unsafe_allow_html=True)
+    st.markdown('<h3 class="subtitle">Spot Rebalancer Pro</h3>', unsafe_allow_html=True)
+
+    # Circular KMFX Logo
+    st.markdown('<div class="logo-circle">KMFX</div>', unsafe_allow_html=True)
+
+    st.markdown("<p style='text-align: center; color: #aaaaaa; margin-top: 10px;'>Advanced Crypto Portfolio Manager for 2029 Bull Run</p>", unsafe_allow_html=True)
+    st.markdown("---")
+
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
+
     with tab1:
-        u = st.text_input("Username")
-        p = st.text_input("Password", type="password")
-        if st.button("Login", type="primary"):
-            users = load_users()
-            hashed = hashlib.sha256(p.encode()).hexdigest()
-            if u in users and users[u].get("password") == hashed:
-                st.session_state.logged_in = True
-                st.session_state.username = u
-                st.session_state.role = users[u].get("role", "client")
-                st.success("✅ Login Successful!")
-                st.rerun()
-            else:
-                st.error("Invalid credentials")
-    with tab2:
-        nu = st.text_input("New Username")
-        np = st.text_input("New Password", type="password")
-        cp = st.text_input("Confirm Password", type="password")
-        role = st.radio("Account Type", ["Client", "Admin"], horizontal=True)
-        if st.button("Create Account", type="primary"):
-            if np == cp and nu:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            if st.button("Login", type="primary", use_container_width=True):
                 users = load_users()
-                if nu not in users:
-                    users[nu] = {
-                        "password": hashlib.sha256(np.encode()).hexdigest(),
-                        "role": role.lower(),
-                        "kucoin_api_key": "",
-                        "kucoin_secret": "",
-                        "kucoin_password": ""
-                    }
-                    save_users(users)
-                    st.success(f"✅ {role} Account Created!")
+                hashed = hashlib.sha256(p.encode()).hexdigest()
+                if u in users and users[u].get("password") == hashed:
+                    st.session_state.logged_in = True
+                    st.session_state.username = u
+                    st.session_state.role = users[u].get("role", "client")
+                    st.success("✅ Login Successful!")
+                    st.rerun()
                 else:
-                    st.error("Username exists")
+                    st.error("Invalid credentials")
+
+    with tab2:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            nu = st.text_input("New Username")
+            np = st.text_input("New Password", type="password")
+            cp = st.text_input("Confirm Password", type="password")
+            role = st.radio("Account Type", ["Client", "Admin"], horizontal=True)
+            if st.button("Create Account", type="primary", use_container_width=True):
+                if np == cp and nu:
+                    users = load_users()
+                    if nu not in users:
+                        users[nu] = {
+                            "password": hashlib.sha256(np.encode()).hexdigest(),
+                            "role": role.lower(),
+                            "kucoin_api_key": "",
+                            "kucoin_secret": "",
+                            "kucoin_password": ""
+                        }
+                        save_users(users)
+                        st.success(f"✅ {role} Account Created!")
+                    else:
+                        st.error("Username already exists")
+                else:
+                    st.error("Passwords do not match")
     st.stop()
 
+# ===================== AFTER LOGIN =====================
 if st.button("🚪 Logout"):
     st.session_state.logged_in = False
     st.rerun()
 
-st.title("🚀 KMFX Spot Rebalancer Pro - Final Version")
+st.title("🚀 KMFX Spot Rebalancer Pro")
 st.sidebar.success(f"👤 {st.session_state.username} | {st.session_state.role.upper()}")
 
 # ===================== SIDEBAR =====================
@@ -186,9 +225,6 @@ class KMFXRebalancer:
     def __init__(self):
         self.mode = "paper" if "Paper" in mode else "real"
         self.exchange = None
-        self.username = st.session_state.username
-        self.portfolio_state = load_portfolio_state(self.username)
-       
         if self.mode == "real" and api_key and api_secret and api_pass:
             try:
                 self.exchange = ccxt.kucoin({
@@ -216,27 +252,17 @@ class KMFXRebalancer:
                 else:
                     price = 62000 if coin == "BTC" else 3200 if coin == "ETH" else 150
                     qty = 0.05 if coin == "BTC" else 1.5
-               
                 value = qty * price
                 total += value
-               
-                pos = self.portfolio_state["positions"].get(coin, {})
-                avg_cost = pos.get("avg_cost", price)
-                unrealized_pnl = (price - avg_cost) * qty if qty > 0 else 0
-                pnl_percent = ((price - avg_cost) / avg_cost * 100) if avg_cost > 0 else 0
-               
                 data.append({
                     "Coin": coin,
                     "Price": round(price, 4),
                     "Qty": round(qty, 6),
                     "Value (USDT)": round(value, 2),
-                    "% Alloc": round(value / total * 100, 2) if total > 0 else 0,
-                    "Avg Cost": round(avg_cost, 4),
-                    "Unrealized P&L": round(unrealized_pnl, 2),
-                    "P&L %": round(pnl_percent, 2)
+                    "%": round(value / total * 100, 2) if total > 0 else 0
                 })
             except:
-                data.append({"Coin": coin, "Price": 0, "Qty": 0, "Value (USDT)": 0, "% Alloc": 0, "Avg Cost": 0, "Unrealized P&L": 0, "P&L %": 0})
+                data.append({"Coin": coin, "Price": 0, "Qty": 0, "Value (USDT)": 0, "%": 0})
         return pd.DataFrame(data), total
 
     def rebalance(self):
@@ -244,7 +270,7 @@ class KMFXRebalancer:
             return "✅ Paper Trading Simulation Successful!"
         else:
             if self.exchange:
-                return "✅ Real Rebalance Executed (Smart Logic Applied)!"
+                return "✅ Real Rebalance Executed!"
             else:
                 return "❌ Please setup and save your API Keys first!"
 
@@ -269,7 +295,7 @@ if st.session_state.role == "admin":
             client_name = st.text_input("Client Name")
             plan = st.selectbox("Plan", ["Trial (30 days)", "1 Year", "Lifetime"])
             days = 30 if "Trial" in plan else 365 if "Year" in plan else 3650
-            
+           
             if st.button("Generate Activation Key", type="primary"):
                 if machine_id_input and client_name:
                     key, expiry = create_license(machine_id_input, client_name, days)
@@ -288,7 +314,7 @@ if st.session_state.role == "admin":
             else:
                 st.info("No licenses yet.")
 
-# ===================== YOUR EXISTING TABS =====================
+# ===================== OTHER TABS =====================
 with selected_tabs[0]:
     st.subheader(f"Live Portfolio - {exchange_name} • {mode}")
     df, total = bot.get_portfolio()
@@ -374,6 +400,6 @@ with selected_tabs[-1]:
     ]
     st.dataframe(pd.DataFrame(top), use_container_width=True)
 
-st.caption("KMFX Spot Rebalancer Pro • Final Working Version with Supabase License")
+st.caption("KMFX Spot Rebalancer Pro • Final Working Version")
 time.sleep(15)
 st.rerun()
