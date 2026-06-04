@@ -120,21 +120,20 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
+if 'bypass_license' not in st.session_state:
+    st.session_state.bypass_license = False
 
 # ===================== LICENSE CHECK =====================
 machine_id = get_machine_id()
 is_licensed = check_license(machine_id)
 
-if not is_licensed and not st.session_state.logged_in:
+if not is_licensed and not st.session_state.logged_in and not st.session_state.bypass_license:
     st.warning("🔑 **License Required**")
     st.info(f"**Your Machine ID:** `{machine_id}`")
     st.info("**📋 Copy the Machine ID first** before clicking the button.")
     
     if st.button("🔑 Login as Admin (Bypass License)", type="primary", use_container_width=True):
-        st.session_state.logged_in = True
-        st.session_state.username = "admin"
-        st.session_state.role = "admin"
-        st.success("✅ Logged in as Admin")
+        st.session_state.bypass_license = True
         st.rerun()
     st.stop()
 
@@ -165,8 +164,8 @@ if not st.session_state.logged_in:
         
         with login_tab1:
             st.write("**Admin Login**")
-            u = st.text_input("Username", key="admin_login")
-            p = st.text_input("Password", type="password", key="admin_pass")
+            u = st.text_input("Username", key="admin_u")
+            p = st.text_input("Password", type="password", key="admin_p")
             if st.button("Login as Admin", type="primary", use_container_width=True):
                 users = load_users()
                 hashed = hashlib.sha256(p.encode()).hexdigest()
@@ -181,8 +180,8 @@ if not st.session_state.logged_in:
 
         with login_tab2:
             st.write("**Member / Client Login**")
-            u = st.text_input("Username", key="member_login")
-            p = st.text_input("Password", type="password", key="member_pass")
+            u = st.text_input("Username", key="member_u")
+            p = st.text_input("Password", type="password", key="member_p")
             if st.button("Login as Member", type="primary", use_container_width=True):
                 users = load_users()
                 hashed = hashlib.sha256(p.encode()).hexdigest()
@@ -208,7 +207,6 @@ if not st.session_state.logged_in:
             role = st.radio("Account Type", ["Client", "Admin"], horizontal=True)
             email = st.text_input("Email Address")
             contact = st.text_input("Contact Number")
-            
             machine_id_input = st.text_input("Machine ID (Required for Client)", placeholder="Paste your copied Machine ID here") if role == "Client" else ""
 
             if st.button("Create Account", type="primary", use_container_width=True):
@@ -347,13 +345,13 @@ if st.session_state.role == "admin":
                         st.write(f"**Machine ID:** {info.get('machine_id', 'N/A')}")
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            if st.button("✅ Approve", key=f"approve_{username}"):
+                            if st.button("✅ Approve", key=f"app_{username}"):
                                 users[username]["status"] = "approved"
                                 save_users(users)
                                 st.success(f"Approved {username}")
                                 st.rerun()
                         with col2:
-                            if st.button("❌ Reject", key=f"reject_{username}"):
+                            if st.button("❌ Reject", key=f"rej_{username}"):
                                 users[username]["status"] = "rejected"
                                 save_users(users)
                                 st.error(f"Rejected {username}")
@@ -367,7 +365,7 @@ if st.session_state.role == "admin":
                                     st.success("Activation Key Assigned!")
                                     st.rerun()
             else:
-                st.info("No pending users at the moment.")
+                st.info("No pending users.")
 
         with admin_tab2:
             st.subheader("🔑 All Licenses")
@@ -463,6 +461,6 @@ with selected_tabs[-1]:
     ]
     st.dataframe(pd.DataFrame(top), use_container_width=True)
 
-st.caption("KMFX Spot Rebalancer Pro • Final Working Version with Approval System")
+st.caption("KMFX Spot Rebalancer Pro • Final Working Version")
 time.sleep(10)
 st.rerun()
