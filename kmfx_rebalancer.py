@@ -76,12 +76,21 @@ def load_users():
             data = json.load(f)
             for u, v in list(data.items()):
                 if isinstance(v, str):
-                    data[u] = {"password": v, "role": "client"}
+                    data[u] = {
+                        "password": v, 
+                        "role": "client", 
+                        "machine_id": "",
+                        "status": "pending",
+                        "kucoin_api_key": "",
+                        "kucoin_secret": "",
+                        "kucoin_password": ""
+                    }
             return data
     except:
         return {}
 
 def save_users(users):
+    os.makedirs('data', exist_ok=True)
     with open(USER_FILE, 'w') as f:
         json.dump(users, f, indent=2)
 
@@ -93,6 +102,7 @@ def load_portfolio_state(username):
         return {"positions": {}, "last_rebalance": None, "history": []}
 
 def save_portfolio_state(username, state):
+    os.makedirs('data', exist_ok=True)
     try:
         with open(PORTFOLIO_FILE, 'r') as f:
             all_data = json.load(f)
@@ -147,44 +157,76 @@ if not st.session_state.logged_in:
     tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
 
     with tab1:
-        col1, col2, col3 = st.columns([1,2,1])
-        with col2:
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            if st.button("Login", type="primary", use_container_width=True):
+        login_tab1, login_tab2 = st.tabs(["👑 Admin Login", "👤 Member Login"])
+        
+        with login_tab1:   # Admin Login
+            st.write("**Admin Login**")
+            u = st.text_input("Username", key="admin_login")
+            p = st.text_input("Password", type="password", key="admin_pass")
+            if st.button("Login as Admin", type="primary", use_container_width=True):
+                users = load_users()
+                hashed = hashlib.sha256(p.encode()).hexdigest()
+                if u in users and users[u].get("password") == hashed and users[u].get("role") == "admin":
+                    st.session_state.logged_in = True
+                    st.session_state.username = u
+                    st.session_state.role = "admin"
+                    st.success("✅ Admin Login Successful!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid Admin credentials or not an Admin account")
+
+        with login_tab2:   # Member Login
+            st.write("**Member / Client Login**")
+            u = st.text_input("Username", key="member_login")
+            p = st.text_input("Password", type="password", key="member_pass")
+            if st.button("Login as Member", type="primary", use_container_width=True):
                 users = load_users()
                 hashed = hashlib.sha256(p.encode()).hexdigest()
                 if u in users and users[u].get("password") == hashed:
-                    st.session_state.logged_in = True
-                    st.session_state.username = u
-                    st.session_state.role = users[u].get("role", "client")
-                    st.success("✅ Login Successful!")
-                    st.rerun()
+                    if users[u].get("status") == "approved" or users[u].get("role") == "admin":
+                        st.session_state.logged_in = True
+                        st.session_state.username = u
+                        st.session_state.role = users[u].get("role", "client")
+                        st.success("✅ Login Successful!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Your account is still pending approval by Admin")
                 else:
                     st.error("Invalid credentials")
 
-    with tab2:
+    with tab2:   # Register
+        st.write("**Create New Account**")
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             nu = st.text_input("New Username")
             np = st.text_input("New Password", type="password")
             cp = st.text_input("Confirm Password", type="password")
             role = st.radio("Account Type", ["Client", "Admin"], horizontal=True)
+            
+            machine_id_input = ""
+            if role == "Client":
+                machine_id_input = st.text_input("Machine ID (Required)", placeholder="Paste your copied Machine ID here")
+            
             if st.button("Create Account", type="primary", use_container_width=True):
                 if np == cp and nu:
-                    users = load_users()
-                    if nu not in users:
-                        users[nu] = {
-                            "password": hashlib.sha256(np.encode()).hexdigest(),
-                            "role": role.lower(),
-                            "kucoin_api_key": "",
-                            "kucoin_secret": "",
-                            "kucoin_password": ""
-                        }
-                        save_users(users)
-                        st.success(f"✅ {role} Account Created!")
+                    if role == "Client" and not machine_id_input.strip():
+                        st.error("❌ Machine ID is required for Client accounts")
                     else:
-                        st.error("Username already exists")
+                        users = load_users()
+                        if nu not in users:
+                            users[nu] = {
+                                "password": hashlib.sha256(np.encode()).hexdigest(),
+                                "role": role.lower(),
+                                "machine_id": machine_id_input.strip(),
+                                "status": "approved" if role == "Admin" else "pending",
+                                "kucoin_api_key": "",
+                                "kucoin_secret": "",
+                                "kucoin_password": ""
+                            }
+                            save_users(users)
+                            st.success(f"✅ {role} Account Created! {'(Pending Approval)' if role == 'Client' else ''}")
+                        else:
+                            st.error("Username already exists")
                 else:
                     st.error("Passwords do not match")
     st.stop()
@@ -281,35 +323,46 @@ if st.session_state.role == "admin":
 
 selected_tabs = st.tabs(tabs_list)
 
-# Admin Panel
+# ===================== ADMIN PANEL =====================
 if st.session_state.role == "admin":
     with selected_tabs[4]:
-        st.subheader("🔑 Admin License Manager")
-        sub1, sub2 = st.tabs(["Create New License", "View All Licenses"])
-        with sub1:
-            st.write("**Create License for Client**")
-            machine_id_input = st.text_input("Client Machine ID")
-            client_name = st.text_input("Client Name")
-            plan = st.selectbox("Plan", ["Trial (30 days)", "1 Year", "Lifetime"])
-            days = 30 if "Trial" in plan else 365 if "Year" in plan else 3650
-            if st.button("Generate Activation Key", type="primary"):
-                if machine_id_input and client_name:
-                    key, expiry = create_license(machine_id_input, client_name, days)
-                    if key:
-                        st.success("✅ License Created Successfully!")
-                        st.code(key, language=None)
-                        st.info(f"Expiry: {expiry.strftime('%Y-%m-%d')}")
-                else:
-                    st.error("Machine ID and Client Name required")
-        with sub2:
-            st.write("**All Licenses**")
+        admin_tab1, admin_tab2 = st.tabs(["Pending Users", "All Licenses"])
+        
+        with admin_tab1:
+            st.subheader("📋 Pending User Approvals")
+            users = load_users()
+            pending = {k: v for k, v in users.items() if v.get("status") == "pending"}
+            
+            if pending:
+                for username, info in pending.items():
+                    with st.expander(f"👤 {username}"):
+                        st.write(f"**Machine ID:** {info.get('machine_id', 'N/A')}")
+                        st.write(f"**Role:** {info.get('role', 'client')}")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("✅ Approve", key=f"app_{username}"):
+                                users[username]["status"] = "approved"
+                                save_users(users)
+                                st.success(f"Approved {username}")
+                                st.rerun()
+                        with col2:
+                            if st.button("❌ Reject", key=f"rej_{username}"):
+                                users[username]["status"] = "rejected"
+                                save_users(users)
+                                st.error(f"Rejected {username}")
+                                st.rerun()
+            else:
+                st.info("No pending users at the moment.")
+
+        with admin_tab2:
+            st.subheader("🔑 All Licenses")
             df = get_all_licenses()
             if not df.empty:
                 st.dataframe(df, use_container_width=True)
             else:
                 st.info("No licenses yet.")
 
-# Dashboard
+# ===================== OTHER TABS =====================
 with selected_tabs[0]:
     st.subheader(f"Live Portfolio - {exchange_name} • {mode}")
     df, total = bot.get_portfolio()
@@ -331,7 +384,6 @@ with selected_tabs[0]:
         fig_pie = px.pie(df, values="Value (USDT)", names="Coin", title="Portfolio Allocation")
         st.plotly_chart(fig_pie, use_container_width=True)
 
-# Strategy
 with selected_tabs[1]:
     st.subheader("⚙️ Advanced Strategy (2029 Bull Run Ready)")
     col1, col2 = st.columns(2)
@@ -348,7 +400,6 @@ with selected_tabs[1]:
     st.success("✅ All Advanced Features are **ACTIVE**")
     st.info(f"Current Strategy: **{strategy_mode}** | Auto Rebalance: **{rebalance_interval}**")
 
-# Analysis
 with selected_tabs[2]:
     st.subheader("📈 Advanced Real-Time Analysis")
     st.write("**Select Coins for Analysis**")
@@ -378,7 +429,6 @@ with selected_tabs[2]:
                 analysis_df = pd.DataFrame(analysis)
                 st.dataframe(analysis_df, use_container_width=True)
 
-# History
 with selected_tabs[3]:
     st.subheader("📜 Portfolio History")
     if bot.portfolio_state.get("history"):
@@ -388,7 +438,6 @@ with selected_tabs[3]:
     else:
         st.info("No history yet. Run rebalance to start tracking.")
 
-# Leaderboard
 with selected_tabs[-1]:
     st.subheader("🏆 Top Performing Clients")
     top = [
@@ -399,4 +448,6 @@ with selected_tabs[-1]:
     ]
     st.dataframe(pd.DataFrame(top), use_container_width=True)
 
-st.caption("KMFX Spot Rebalancer Pro • Final Working Version")
+st.caption("KMFX Spot Rebalancer Pro • Final Version with User Approval System")
+time.sleep(10)
+st.rerun()
