@@ -189,7 +189,7 @@ if not st.session_state.logged_in:
                     st.error("Passwords do not match")
     st.stop()
 
-# ===================== AFTER LOGIN =====================
+# ===================== MAIN APP =====================
 if st.button("🚪 Logout"):
     st.session_state.logged_in = False
     st.session_state.bypass_to_login = False
@@ -221,7 +221,7 @@ class KMFXRebalancer:
         self.mode = "paper" if "Paper" in mode else "real"
         self.exchange = None
         self.username = st.session_state.username
-        self.portfolio_state = load_portfolio_state(self.username)   # ← FIXED HERE
+        self.portfolio_state = load_portfolio_state(self.username)
         
         if self.mode == "real" and api_key and api_secret and api_pass:
             try:
@@ -281,19 +281,17 @@ if st.session_state.role == "admin":
 
 selected_tabs = st.tabs(tabs_list)
 
-# ===================== ADMIN PANEL =====================
+# Admin Panel
 if st.session_state.role == "admin":
     with selected_tabs[4]:
         st.subheader("🔑 Admin License Manager")
         sub1, sub2 = st.tabs(["Create New License", "View All Licenses"])
-        
         with sub1:
             st.write("**Create License for Client**")
             machine_id_input = st.text_input("Client Machine ID")
             client_name = st.text_input("Client Name")
             plan = st.selectbox("Plan", ["Trial (30 days)", "1 Year", "Lifetime"])
             days = 30 if "Trial" in plan else 365 if "Year" in plan else 3650
-           
             if st.button("Generate Activation Key", type="primary"):
                 if machine_id_input and client_name:
                     key, expiry = create_license(machine_id_input, client_name, days)
@@ -303,7 +301,6 @@ if st.session_state.role == "admin":
                         st.info(f"Expiry: {expiry.strftime('%Y-%m-%d')}")
                 else:
                     st.error("Machine ID and Client Name required")
-        
         with sub2:
             st.write("**All Licenses**")
             df = get_all_licenses()
@@ -312,7 +309,7 @@ if st.session_state.role == "admin":
             else:
                 st.info("No licenses yet.")
 
-# ===================== OTHER TABS =====================
+# Dashboard
 with selected_tabs[0]:
     st.subheader(f"Live Portfolio - {exchange_name} • {mode}")
     df, total = bot.get_portfolio()
@@ -334,6 +331,7 @@ with selected_tabs[0]:
         fig_pie = px.pie(df, values="Value (USDT)", names="Coin", title="Portfolio Allocation")
         st.plotly_chart(fig_pie, use_container_width=True)
 
+# Strategy
 with selected_tabs[1]:
     st.subheader("⚙️ Advanced Strategy (2029 Bull Run Ready)")
     col1, col2 = st.columns(2)
@@ -350,6 +348,7 @@ with selected_tabs[1]:
     st.success("✅ All Advanced Features are **ACTIVE**")
     st.info(f"Current Strategy: **{strategy_mode}** | Auto Rebalance: **{rebalance_interval}**")
 
+# Analysis
 with selected_tabs[2]:
     st.subheader("📈 Advanced Real-Time Analysis")
     st.write("**Select Coins for Analysis**")
@@ -379,6 +378,7 @@ with selected_tabs[2]:
                 analysis_df = pd.DataFrame(analysis)
                 st.dataframe(analysis_df, use_container_width=True)
 
+# History
 with selected_tabs[3]:
     st.subheader("📜 Portfolio History")
     if bot.portfolio_state.get("history"):
@@ -388,6 +388,7 @@ with selected_tabs[3]:
     else:
         st.info("No history yet. Run rebalance to start tracking.")
 
+# Leaderboard
 with selected_tabs[-1]:
     st.subheader("🏆 Top Performing Clients")
     top = [
@@ -399,5 +400,3 @@ with selected_tabs[-1]:
     st.dataframe(pd.DataFrame(top), use_container_width=True)
 
 st.caption("KMFX Spot Rebalancer Pro • Final Working Version")
-time.sleep(15)
-st.rerun()
