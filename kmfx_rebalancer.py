@@ -18,6 +18,11 @@ st.set_page_config(page_title="KMFX Rebalancer Pro", layout="centered", initial_
 # ===================== SUPABASE =====================
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    st.error("❌ Supabase URL and Key not found in .env")
+    st.stop()
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ===================== LICENSE SYSTEM =====================
@@ -101,20 +106,26 @@ def save_portfolio_state(username, state):
 machine_id = get_machine_id()
 is_licensed = check_license(machine_id)
 
-if not is_licensed and st.session_state.get("username", "").lower() != "admin":
+if not is_licensed:
     st.warning("🔑 **License Required**")
     st.info(f"**Your Machine ID:** `{machine_id}`")
     st.info("Contact Admin to get your Activation Key.")
+
+    if st.button("🔑 Login as Admin (Bypass License)", type="primary"):
+        st.session_state.logged_in = True
+        st.session_state.username = "admin"
+        st.session_state.role = "admin"
+        st.rerun()
     st.stop()
 
-# ===================== MAIN LANDING PAGE =====================
+# ===================== LOGIN =====================
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
 
 if not st.session_state.logged_in:
-    # Custom CSS for nice look
+    # Beautiful Landing Page with Circular Logo
     st.markdown("""
         <style>
         .logo-circle {
@@ -131,15 +142,12 @@ if not st.session_state.logged_in:
             color: #000;
             box-shadow: 0 15px 40px rgba(0, 255, 136, 0.5);
         }
-        .title {text-align: center; color: #00ff88; font-size: 2.8em; margin-bottom: 5px;}
-        .subtitle {text-align: center; color: #ffffff; font-size: 1.4em;}
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<h1 class="title">KMFX</h1>', unsafe_allow_html=True)
-    st.markdown('<h3 class="subtitle">Spot Rebalancer Pro</h3>', unsafe_allow_html=True)
+    st.markdown('<h1 style="text-align: center; color: #00ff88;">KMFX</h1>', unsafe_allow_html=True)
+    st.markdown('<h3 style="text-align: center;">Spot Rebalancer Pro</h3>', unsafe_allow_html=True)
 
-    # Circular Logo
     st.markdown('<div class="logo-circle">KMFX</div>', unsafe_allow_html=True)
 
     st.markdown("<p style='text-align: center; color: #aaaaaa; margin-top: 10px;'>Advanced Crypto Portfolio Manager for 2029 Bull Run</p>", unsafe_allow_html=True)
