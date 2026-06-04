@@ -166,7 +166,7 @@ if st.button("🚪 Logout"):
 st.title("🚀 KMFX Spot Rebalancer Pro")
 st.sidebar.success(f"👤 {st.session_state.username} | {st.session_state.role.upper()}")
 
-# ===================== SIDEBAR SETTINGS (Moved Up) =====================
+# ===================== SIDEBAR SETTINGS =====================
 st.sidebar.subheader("⚙️ Trading Settings")
 exchange_name = st.sidebar.selectbox("Exchange", ["KuCoin", "Binance"])
 mode = st.sidebar.radio("Trading Mode", ["Paper Trading", "Real Trading"], horizontal=True)
@@ -194,7 +194,9 @@ class KMFXRebalancer:
         self.mode = "paper" if "Paper" in mode else "real"
         self.exchange = None
         self.username = st.session_state.username
+        self.portfolio_state = {"positions": {}, "last_rebalance": None, "history": []}  # FIXED HERE
 
+        # Load API keys from Supabase
         user_resp = supabase.table("users").select("kucoin_api_key, kucoin_secret, kucoin_password").eq("username", self.username).execute()
         if user_resp.data:
             ud = user_resp.data[0]
